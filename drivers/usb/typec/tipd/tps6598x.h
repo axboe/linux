@@ -363,6 +363,13 @@ struct tps6598x {
 	int irq;
 	u8 i2c_protocol:1;
 	u8 dbma_at_probe:1; /* Apple "DBMa" debug mode was active at probe */
+	/* DEBUG (local): probe-time state, to explain first-access failures */
+	u8 dbg_fail_seen:1;
+	u8 dbg_ssps_issued:1;
+	u8 dbg_state_at_probe;
+	int dbg_ssps_ret;
+	ktime_t dbg_probe_start;
+	ktime_t dbg_ssps_done;
 
 	struct gpio_desc *reset;
 	struct typec_port *port;
