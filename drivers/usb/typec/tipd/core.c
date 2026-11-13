@@ -174,6 +174,10 @@ static int tps6598x_block_write(struct tps6598x *tps, u8 reg,
 	return regmap_raw_write(tps->regmap, reg, data, len + 1);
 }
 
+/* DEBUG (local) */
+static void tipd_dbg_dump(struct tps6598x *tps, const char *when);
+static void tipd_dbg_first_failure(struct tps6598x *tps, const char *what, int err);
+
 static inline int tps6598x_read8(struct tps6598x *tps, u8 reg, u8 *val)
 {
 	return tps6598x_block_read(tps, reg, val, sizeof(u8));
@@ -1654,8 +1658,10 @@ static void cd321x_resume_work(struct work_struct *work)
 				 msecs_to_jiffies(cd321x_pm_ack_failed(&cd321x->pm)));
 		return;
 	}
-	if (cd321x_pm_acked(&cd321x->pm))
+	if (cd321x_pm_acked(&cd321x->pm)) {
 		dev_info(tps->dev, "acknowledged events after retrying\n");
+		tipd_dbg_dump(tps, "after retried ack");
+	}
 
 	if (!tps6598x_read_status(tps, &status))
 		goto retry;
@@ -2018,8 +2024,10 @@ static int cd321x_check_setup(struct cd321x *cd321x, u64 event)
 	}
 	if (ret && cd321x->reset_by_cut)
 		dev_dbg(tps->dev, "set up again after the debug link's cut\n");
-	else if (ret)
+	else if (ret) {
 		dev_warn(tps->dev, "restored controller power state and interrupt mask\n");
+		tipd_dbg_dump(tps, "after controller restore");
+	}
 	cd321x->reset_by_cut = false;
 	/* Only a fresh snapshot may be applied after restoring the controller. */
 	cd321x->state_valid = false;
@@ -2092,6 +2100,7 @@ static irqreturn_t cd321x_interrupt(int irq, void *data)
 	ret = tps6598x_read64(tps, TPS_REG_INT_EVENT1, &event);
 	if (ret) {
 		dev_err(tps->dev, "%s: failed to read events\n", __func__);
+		tipd_dbg_first_failure(tps, "event read", ret);
 		goto err_lost;
 	}
 	trace_cd321x_irq(event);
@@ -2170,6 +2179,7 @@ static irqreturn_t tps25750_interrupt(int irq, void *data)
 	ret = tps6598x_block_read(tps, TPS_REG_INT_EVENT1, event, 11);
 	if (ret) {
 		dev_err(tps->dev, "%s: failed to read events\n", __func__);
+		tipd_dbg_first_failure(tps, "event read", ret);
 		goto err_unlock;
 	}
 	trace_tps25750_irq(event[0]);
@@ -2386,6 +2396,59 @@ static int tps6598x_psy_get_prop(struct power_supply *psy,
  */
 #define CD321X_SSPS_READ_GAP_US	5000
 
+/* DEBUG (local): is the MagSafe/AC supply online? -1 when it is not known. */
+static int tipd_dbg_ac_online(void)
+{
+	union power_supply_propval val = { };
+	struct power_supply *psy;
+	int ret;
+
+	psy = power_supply_get_by_name("macsmc-ac");
+	if (!psy)
+		return -1;
+	ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &val);
+	power_supply_put(psy);
+	return ret ? -1 : val.intval;
+}
+
+/* DEBUG (local): one line of controller state; reads may fail, that is logged too. */
+static void tipd_dbg_dump(struct tps6598x *tps, const char *when)
+{
+	char mode[5] = { };
+	u32 status = 0, boot = 0;
+	u16 pwr = 0;
+	u8 state = 0xff;
+	int rm, rs, rb, rp, rst;
+
+	rm = tps6598x_read32(tps, TPS_REG_MODE, (void *)mode);
+	rst = tps6598x_read8(tps, TPS_REG_SYSTEM_POWER_STATE, &state);
+	rs = tps6598x_read32(tps, TPS_REG_STATUS, &status);
+	rb = tps6598x_read32(tps, TPS_REG_BOOT_STATUS, &boot);
+	rp = tps6598x_read16(tps, TPS_REG_POWER_STATUS, &pwr);
+	dev_info(tps->dev,
+		 "tipd-debug: %s: mode '%.4s'(%d) power state %#x(%d) status %#x(%d) boot status %#x(%d) power status %#x(%d); AC online %d; %lld ms after probe start, %lld ms after SSPS; at probe: power state %#x, SSPS %s (ret %d)\n",
+		 when, mode, rm, state, rst, status, rs, boot, rb, pwr, rp,
+		 tipd_dbg_ac_online(),
+		 ktime_ms_delta(ktime_get(), tps->dbg_probe_start),
+		 tps->dbg_ssps_issued ? ktime_ms_delta(ktime_get(), tps->dbg_ssps_done) : -1,
+		 tps->dbg_state_at_probe, tps->dbg_ssps_issued ? "issued" : "not needed",
+		 tps->dbg_ssps_ret);
+}
+
+/* DEBUG (local): the first failed access after probe started; no register access here. */
+static void tipd_dbg_first_failure(struct tps6598x *tps, const char *what, int err)
+{
+	if (tps->dbg_fail_seen)
+		return;
+	tps->dbg_fail_seen = 1;
+	dev_info(tps->dev,
+		 "tipd-debug: first failure (%s: %d) %lld ms after probe start, %lld ms after SSPS; AC online %d; at probe: power state %#x, SSPS %s (ret %d)\n",
+		 what, err, ktime_ms_delta(ktime_get(), tps->dbg_probe_start),
+		 tps->dbg_ssps_issued ? ktime_ms_delta(ktime_get(), tps->dbg_ssps_done) : -1,
+		 tipd_dbg_ac_online(), tps->dbg_state_at_probe,
+		 tps->dbg_ssps_issued ? "issued" : "not needed", tps->dbg_ssps_ret);
+}
+
 static int cd321x_switch_power_state(struct tps6598x *tps, u8 target_state)
 {
 	u8 state;
@@ -2405,6 +2468,9 @@ static int cd321x_switch_power_state(struct tps6598x *tps, u8 target_state)
 	if (ret)
 		return ret;
 
+	if (target_state == TPS_SYSTEM_POWER_STATE_S0 && !tps->dbg_ssps_issued)
+		tps->dbg_state_at_probe = state;
+
 	if (state == target_state)
 		return 0;
 
@@ -2423,6 +2489,11 @@ static int cd321x_switch_power_state(struct tps6598x *tps, u8 target_state)
 	else
 		ret = tps6598x_exec_cmd(tps, "SSPS", sizeof(target_state),
 				      &target_state, 0, NULL);
+	if (target_state == TPS_SYSTEM_POWER_STATE_S0) {
+		tps->dbg_ssps_issued = 1;
+		tps->dbg_ssps_ret = ret;
+		tps->dbg_ssps_done = ktime_get();
+	}
 	if (ret)
 		return ret;
 
@@ -3489,6 +3560,8 @@ int tipd_init(struct tps6598x *tps)
 		return -EPROBE_DEFER;
 
 	dev_dbg(tps->dev, "Type-C probe start\n");
+	tps->dbg_probe_start = ktime_get();
+	tps->dbg_state_at_probe = 0xff;
 	tps->reset = devm_gpiod_get_optional(tps->dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(tps->reset))
 		return dev_err_probe(tps->dev, PTR_ERR(tps->reset),
@@ -3585,9 +3658,11 @@ int tipd_init(struct tps6598x *tps)
 	if (tps->contaminant_ops) {
 		ret = tps->contaminant_ops->update(tps);
 		if (ret) {
-			if (ret != -EINPROGRESS)
+			if (ret != -EINPROGRESS) {
 				dev_warn(tps->dev,
 					 "connector contaminant state unavailable: %d\n", ret);
+				tipd_dbg_first_failure(tps, "contaminant update in probe", ret);
+			}
 			ret = 0;
 		}
 	}
@@ -3643,6 +3718,7 @@ int tipd_init(struct tps6598x *tps)
 	if (tps->data->ready)
 		tps->data->ready(tps);
 
+	tipd_dbg_dump(tps, tps->dbg_fail_seen ? "probe done, after a failure" : "probe done, clean");
 	return 0;
 
 err_disconnect:
