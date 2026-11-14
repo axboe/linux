@@ -133,10 +133,11 @@
 &sgx {
 	/*
 	 * "apple,agx-g17s" is what the loader checks and the driver binds
-	 * (drivers/gpu/drm/asahi/driver.rs). The driver uses the J714 tables for it,
-	 * 5 mV below this unit's ADT voltages at eight of the fourteen states.
+	 * (drivers/gpu/drm/asahi/driver.rs). The first string selects the K116s board
+	 * tables; a driver without them falls back to the J714 tables, 5 mV below this
+	 * unit's ADT voltages at eight of the fourteen states.
 	 */
-	compatible = "apple,agx-g17s";
+	compatible = "apple,agx-g17s-k116", "apple,agx-g17s";
 	/* ADT sgx reg[0] 0x21_00000000 + 0x3fdc000; the driver maps the first 16 MiB as "sgx" */
 	reg = <0x23 0x0 0x0 0x3fdc000>;
 	reg-names = "sgx";
