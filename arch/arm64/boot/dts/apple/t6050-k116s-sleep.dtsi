@@ -249,3 +249,21 @@
 &sleep {
 	apple,pinctrl-skip-pins = <5 6 7 112 138 141>;
 };
+
+/*
+ * EXPERIMENTAL: the display coprocessor's secure mailbox (ADT /arm-io/dcp-exclave-mailbox,
+ * iop,secure-rtbuddy-proxy, reg 0x4cae7c000). Firmware 27.2 acknowledges no IOP power state
+ * while nothing answers it, as on T8140.
+ */
+&{/soc@200000000} {
+	dcp_secure_mbox: mailbox@4cae7c000 {
+		compatible = "apple,t6050-secure-rtbuddy-proxy", "apple,secure-rtbuddy-proxy";
+		reg = <0x4 0xcae7c000 0x0 0x4000>;
+		#mbox-cells = <0>;
+	};
+};
+
+&dcp {
+	mboxes = <&dcp_mbox>, <&dcp_secure_mbox>;
+	mbox-names = "mbox", "secure";
+};

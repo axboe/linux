@@ -1173,6 +1173,8 @@ static int dcp_v27_reopen_live(struct apple_dcp *dcp)
 	return 0;
 }
 
+static void dcp_v27_secure_idle_atomic(void *data);
+
 static int dcp_v27_late_arm(void *data)
 {
 	struct dcp_v27_sleep *s = data;
@@ -1202,6 +1204,8 @@ static int dcp_v27_late_arm(void *data)
 		ret = apple_rtkit_v27_arm(dcp->rtk, &s->rx);
 		if (ret)
 			dev_info(dcp->dev, "V27 arm: RTKit %d\n", ret);
+		else
+			apple_rtkit_v27_set_after_ap(s->rx, dcp_v27_secure_idle_atomic, dcp);
 	}
 	if (ret) {
 		if (s->display && !s->display_early) {
@@ -1218,6 +1222,26 @@ static int dcp_v27_late_arm(void *data)
 	}
 	s->phase = V27_ARMED;
 	return 0;
+}
+
+/*
+ * EXPERIMENTAL (K116s, firmware 27.2): the secure port's AP idle between the main mailbox's AP
+ * idle and its IOP idle, as dcp_secure_port_idle() for the other stop path, polled: this runs
+ * with interrupts off.
+ */
+static bool v27_secure_idle = true;
+module_param(v27_secure_idle, bool, 0644);
+
+static void dcp_v27_secure_idle_atomic(void *data)
+{
+	struct apple_dcp *dcp = data;
+	unsigned int us = 0;
+	int ret;
+
+	if (!v27_secure_idle || !dcp->secure_rtk || !dcp->secure_answered)
+		return;
+	ret = apple_rtkit_polled_ap_idle(dcp->secure_rtk, &us);
+	dev_info(dcp->dev, "V27 late stop: secure port AP idle: %d after %u us\n", ret, us);
 }
 
 static int dcp_v27_late_check(void *data)
@@ -1320,8 +1344,12 @@ static int dcp_v27_sleep_prepare(struct apple_dcp *dcp)
 		return -EOPNOTSUPP;
 	}
 	if (!dcp->retain_dma || IS_ERR_OR_NULL(dcp->rtk) || !dcp->active || dcp->crashed || dcp->quiescing ||
-	    dcp->peer_owner || dcp->peer_reserved || dcp->secure_rtk)
+	    dcp->peer_owner || dcp->peer_reserved ||
+	    (dcp->secure_rtk && !of_machine_is_compatible("apple,k116s")))
 		return -EBUSY;
+	/* EXPERIMENTAL: the secure port is idled from the late stop, with nothing else reading it. */
+	if (dcp->secure_rtk && dcp->secure_answered)
+		dcp_secure_poll_stop(dcp);
 	/* Mode-config suspend is the actual DRM scanout-owner boundary. No HPD
 	 * shortcut: external firmware still executes A484/A500/AFK and late IDLE.
 	 */

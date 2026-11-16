@@ -39,6 +39,7 @@ int apple_rtkit_v27_arm(struct apple_rtkit *, struct apple_rtkit_v27_scope **);
 bool apple_rtkit_v27_live(struct apple_rtkit *);
 int apple_rtkit_v27_check(struct apple_rtkit_v27_scope *);
 int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *);
+void apple_rtkit_v27_set_after_ap(struct apple_rtkit_v27_scope *s, void (*fn)(void *), void *data);
 int apple_rtkit_v27_disarm(struct apple_rtkit_v27_scope *, bool stopped);
 
 int apple_dart_v27_claim(struct device *provider, struct device *firmware,

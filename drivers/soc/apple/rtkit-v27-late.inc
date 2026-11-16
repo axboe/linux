@@ -7,7 +7,19 @@ struct apple_rtkit_v27_scope {
 	DECLARE_KFIFO(deferred, struct apple_mbox_msg, 64);
 	bool held, stopped, failed;
 	int error;
+	/* EXPERIMENTAL: run once between the AP acknowledgment and the IOP request. */
+	void (*after_ap)(void *data);
+	void *after_ap_data;
 };
+
+void apple_rtkit_v27_set_after_ap(struct apple_rtkit_v27_scope *s, void (*fn)(void *), void *data)
+{
+	if (s) {
+		s->after_ap = fn;
+		s->after_ap_data = data;
+	}
+}
+EXPORT_SYMBOL_GPL(apple_rtkit_v27_set_after_ap);
 
 bool apple_rtkit_v27_live(struct apple_rtkit *rtk)
 {
@@ -201,6 +213,8 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 				    arg == v27_idle_ap_state) {
 					ap_ack = true;
 					ap_tick = tick;
+					if (s->after_ap)
+						s->after_ap(s->after_ap_data);
 				} else if (msg.msg1 == APPLE_RTKIT_EP_MGMT && iop_sent && !iop_ack &&
 					   type == APPLE_RTKIT_MGMT_SET_IOP_PWR_STATE_ACK &&
 					   arg == v27_idle_iop_state) {
