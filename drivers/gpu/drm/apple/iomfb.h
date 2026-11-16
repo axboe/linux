@@ -215,6 +215,7 @@ struct dcp_method_entry {
 
 /* The IOMFB method table of a firmware 27.x build, by its compat string; NULL if unknown. */
 const struct dcp_method_entry *iomfb_v27_methods(const char *compat);
+bool iomfb_v27_methods_27_2(const struct dcp_method_entry *methods);
 const struct dcp_method_entry *iomfb_v27_methods_j714s(struct device *dev,
 						       const struct dcp_method_entry *methods);
 /* The first method of a firmware 27.x table that has no ID, NULL if none. */

@@ -264,6 +264,12 @@ const struct dcp_method_entry *iomfb_v27_methods(const char *compat)
  * before (iomfb_v27_missing_method()). NULL if @methods is not the 27.0 table or the copy
  * cannot be made.
  */
+/* EXPERIMENTAL (K116s deep sleep): whether @methods is the 27.2 table. */
+bool iomfb_v27_methods_27_2(const struct dcp_method_entry *methods)
+{
+	return methods == dcp_methods_27_2;
+}
+
 const struct dcp_method_entry *iomfb_v27_methods_j714s(struct device *dev,
 						       const struct dcp_method_entry *methods)
 {

@@ -799,6 +799,28 @@ int iomfb_queue_settle(struct apple_dcp *dcp, unsigned long timeout)
 	}
 }
 
+/*
+ * EXPERIMENTAL (K116s deep sleep): the sleep's calls are written with firmware 27.0's tags.
+ * Firmware 27.2 moved the IOMobileFramebufferAP methods (27.0's A401 and up) up by 50 and
+ * left the A0xx and A1xx ones (iomfb_v27.c). A500, A442 and A115 have not been seen in a
+ * 27.2 call: their tags here follow that rule and are a guess.
+ */
+static void iomfb_v27_sleep_tag(struct apple_dcp *dcp, char *dst, const char *tag)
+{
+	unsigned int n;
+
+	memcpy(dst, tag, 4);
+	if (!iomfb_v27_methods_27_2(dcp->v27_methods))
+		return;
+	n = (tag[1] - '0') * 100 + (tag[2] - '0') * 10 + (tag[3] - '0');
+	if (tag[0] != 'A' || n < 401)
+		return;
+	n += 50;
+	dst[1] = '0' + n / 100;
+	dst[2] = '0' + n / 10 % 10;
+	dst[3] = '0' + n % 10;
+}
+
 static void iomfb_v27_sleep_start(struct apple_dcp *dcp,
 				  struct iomfb_transaction *transaction);
 
@@ -887,9 +909,15 @@ static void iomfb_v27_sleep_start(struct apple_dcp *dcp,
 		 rpc->data, iomfb_v27_sleep_done, rpc);
 	dcp->push_out_prefill = NULL;
 	if ((rpc->a442 || rpc->a442_key) && !rpc->oob) {
-		static const struct dcp_method_entry a442 = {
+		static const struct dcp_method_entry a442_27_0 = {
 			.name = "v27_a442", .tag = { 'A', '4', '4', '2' },
 		};
+		/* EXPERIMENTAL: 27.2, by the +50 rule; not seen in a call. */
+		static const struct dcp_method_entry a442_27_2 = {
+			.name = "v27_a442", .tag = { 'A', '4', '9', '2' },
+		};
+		const struct dcp_method_entry *a442 =
+			iomfb_v27_methods_27_2(dcp->v27_methods) ? &a442_27_2 : &a442_27_0;
 		u8 in[92];
 
 		memset(in, 0xaa, sizeof(in));
@@ -900,7 +928,7 @@ static void iomfb_v27_sleep_start(struct apple_dcp *dcp,
 			memset(in + 80, 0, 12);
 			in[84] = 0x20;
 		}
-		dcp_push(dcp, true, &a442, sizeof(in), 4100, in, iomfb_v27_a442_done, NULL);
+		dcp_push(dcp, true, a442, sizeof(in), 4100, in, iomfb_v27_a442_done, NULL);
 	}
 }
 
@@ -997,7 +1025,7 @@ static int iomfb_v27_rpc(struct apple_dcp *dcp, bool a500, bool on, bool flags)
 	rpc->method = (struct dcp_method_entry) {
 		.name = a500 ? "v27_sleep_500" : "v27_sleep_power",
 	};
-	memcpy(rpc->method.tag, a500 ? "A500" : "A484", 4);
+	iomfb_v27_sleep_tag(dcp, rpc->method.tag, a500 ? "A500" : "A484");
 	/*
 	 * Off, before each DCP's and DCPEXT's sleep idle: A484 with the sleep's flags, then
 	 * A500's sleep form. On, after the wake: A500's wake form, then A484 with the flags.
@@ -1086,7 +1114,7 @@ static int iomfb_v27_call(struct apple_dcp *dcp, const char *tag, const void *in
 	rpc->transaction.start = iomfb_v27_sleep_start;
 	rpc->transaction.release = iomfb_v27_sleep_release;
 	rpc->method = (struct dcp_method_entry) { .name = "v27_display_stage" };
-	memcpy(rpc->method.tag, tag, 4);
+	iomfb_v27_sleep_tag(dcp, rpc->method.tag, tag);
 	rpc->input = in_len;
 	rpc->output = out_len;
 	rpc->inout = inout;
