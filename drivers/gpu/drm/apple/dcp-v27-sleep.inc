@@ -266,7 +266,9 @@ static int dcp_v27_rtkit_cycle(struct apple_dcp *dcp, unsigned int pause_ms)
 	dcp_v27_sessions(dcp, false);
 	ret = apple_rtkit_idle_strict(dcp->rtk);
 	if (ret) {
-		dev_warn(dcp->dev, "V27 wake: RTKit cycle: idle %d\n", ret);
+		dev_warn(dcp->dev, "V27 wake: RTKit cycle: idle %d: CPU control %#x status %#x\n", ret,
+			 readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL),
+			 readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_STATUS));
 		dcp_v27_sessions(dcp, true);
 		return ret;
 	}
@@ -1247,8 +1249,13 @@ static int dcp_v27_late_stop(void *data)
 	int ret;
 
 	ret = apple_rtkit_v27_idle_atomic(s->rx);
-	if (ret)
+	if (ret) {
+		/* EXPERIMENTAL: the caller panics on this; leave the coprocessor's state in the log. */
+		dev_emerg(dcp->dev, "V27 late stop: idle %d: CPU control %#x status %#x\n", ret,
+			  readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL),
+			  readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_STATUS));
 		return dcp_v27_fail(s, ret);
+	}
 	ret = readl_poll_timeout_atomic(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_STATUS,
 		status, (status & (APPLE_DCP_COPROC_CPU_STATUS_IDLE | APPLE_DCP_COPROC_CPU_STATUS_STOPPED)) ==
 		(APPLE_DCP_COPROC_CPU_STATUS_IDLE | APPLE_DCP_COPROC_CPU_STATUS_STOPPED), 1, 5000);

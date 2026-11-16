@@ -118,13 +118,21 @@ int apple_rtkit_v27_check(struct apple_rtkit_v27_scope *s)
 }
 EXPORT_SYMBOL_GPL(apple_rtkit_v27_check);
 
+/*
+ * EXPERIMENTAL (K116s deep sleep): the idle's budget in 10 us ticks. 10000 (100 ms) is what the
+ * J714s on firmware 27.0 needs; firmware 27.2 has not been seen to finish in it.
+ */
+static unsigned int v27_idle_ticks = 100000;
+module_param(v27_idle_ticks, uint, 0644);
+
 int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 {
 	struct apple_rtkit *rtk;
 	struct apple_mbox_msg msg, echo = {};
 	bool ap_sent = false, ap_ack = false, iop_sent = false, iop_ack = false;
 	bool done = false, echo_pending = false;
-	unsigned int tick;
+	unsigned int tick, rx = 0, ap_tick = 0, iop_tick = 0, done_tick = 0;
+	struct apple_mbox_msg last = {};
 	int ret = -ETIMEDOUT;
 
 	if (!s || !s->held || s->failed || !irqs_disabled())
@@ -133,7 +141,7 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 	/* One shared 100 ms budget. No jiffies, allocation, worker, sleeping
 	 * locks, normal send, or unbounded RX drain in saved context.
 	 */
-	for (tick = 0; tick < 10000; tick++) {
+	for (tick = 0; tick < v27_idle_ticks; tick++) {
 		if (rtk->crashed || rtk->mbox->removing) {
 			ret = -EIO;
 			goto poison;
@@ -176,17 +184,22 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 				u64 arg = msg.msg0 & GENMASK_ULL(51, 0);
 
 				dma_rmb();
+				rx++;
+				last = msg;
 				if (msg.msg1 == APPLE_RTKIT_EP_MGMT && ap_sent && !ap_ack &&
 				    type == APPLE_RTKIT_MGMT_SET_AP_PWR_STATE_ACK &&
 				    arg == APPLE_RTKIT_PWR_STATE_IDLE) {
 					ap_ack = true;
+					ap_tick = tick;
 				} else if (msg.msg1 == APPLE_RTKIT_EP_MGMT && iop_sent && !iop_ack &&
 					   type == APPLE_RTKIT_MGMT_SET_IOP_PWR_STATE_ACK &&
 					   arg == APPLE_RTKIT_PWR_STATE_IDLE) {
 					iop_ack = true;
+					iop_tick = tick;
 				} else if (msg.msg1 == APPLE_RTKIT_EP_MGMT && iop_sent && !done &&
 					   type == APPLE_RTKIT_MGMT_IDLE_NOTIFY && !arg) {
 					done = true;
+					done_tick = tick;
 				} else if (apple_rtkit_oslog_owed_msg(rtk, msg.msg1, msg.msg0)) {
 					echo = msg;
 					echo_pending = true;
@@ -198,6 +211,8 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 			}
 		}
 		if (ap_ack && iop_ack && done && !echo_pending) {
+			dev_info(rtk->dev, "RTKit: atomic idle: AP ack tick %u, IOP ack tick %u, idle notice tick %u, %u received\n",
+				 ap_tick, iop_tick, done_tick, rx);
 			rtk->ap_power_state = rtk->iop_power_state = APPLE_RTKIT_PWR_STATE_IDLE;
 			s->stopped = true;
 			apple_mbox_set_recv_enabled(rtk->mbox, false);
@@ -207,6 +222,11 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 	}
 	ret = -ETIMEDOUT;
 poison:
+	/* EXPERIMENTAL: what the firmware answered. The caller panics; this is the only record. */
+	dev_emerg(rtk->dev,
+		  "RTKit: atomic idle failed %d at tick %u: AP sent %d ack %d (tick %u), IOP sent %d ack %d (tick %u), idle notice %d (tick %u), echo pending %d, %u received, last ep %#llx msg %#llx\n",
+		  ret, tick, ap_sent, ap_ack, ap_tick, iop_sent, iop_ack, iop_tick, done, done_tick,
+		  echo_pending, rx, (u64)last.msg1, (u64)last.msg0);
 	s->failed = true;
 	s->error = ret;
 	rtk->strict_idle_poisoned = true;

@@ -1669,6 +1669,10 @@ static void apple_rtkit_rx(struct apple_mbox *mbox, struct apple_mbox_msg msg,
 				     msg.msg0);
 	}
 
+	/* EXPERIMENTAL (K116s deep sleep): everything the firmware says while an idle is awaited. */
+	if (READ_ONCE(rtk->strict_idle_waiting))
+		dev_info(rtk->dev, "RTKit: while idling: ep %#x msg %#llx\n", ep, msg.msg0);
+
 	if (!test_bit(ep, rtk->endpoints))
 		dev_warn(rtk->dev,
 			 "RTKit: Message to undiscovered endpoint 0x%02x\n",
