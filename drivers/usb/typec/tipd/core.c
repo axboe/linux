@@ -366,6 +366,7 @@ static bool tipd_sleep_ssps_rules(void)
 {
 	return of_machine_is_compatible("apple,j714s") ||
 	       of_machine_is_compatible("apple,j716c") ||
+	       of_machine_is_compatible("apple,k116s") ||
 	       of_machine_is_compatible("apple,j813") ||
 	       of_machine_is_compatible("apple,j815");
 }

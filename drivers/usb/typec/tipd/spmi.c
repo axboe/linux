@@ -743,12 +743,14 @@ static bool sn201202x_sleep_event(struct tps6598x *tps)
  */
 static bool sn201202x_sleep_board(void)
 {
-	return of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,j716c");
+	return of_machine_is_compatible("apple,j714s") ||
+	       of_machine_is_compatible("apple,j716c") ||
+	       of_machine_is_compatible("apple,k116s");
 }
 
 static bool sn201202x_j714s(void)
 {
-	return of_machine_is_compatible("apple,j714s");
+	return (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s"));
 }
 
 /*

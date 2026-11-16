@@ -648,9 +648,11 @@ static int apple_smc_probe(struct platform_device *pdev)
 	smc->dev = &pdev->dev;
 	smc->saved_enabled = of_machine_is_compatible("apple,t6050") &&
 		(of_machine_is_compatible("apple,j714s") ||
-		 of_machine_is_compatible("apple,j716c")) &&
+		 of_machine_is_compatible("apple,j716c") ||
+		 of_machine_is_compatible("apple,k116s")) &&
 		of_device_is_compatible(dev->of_node, "apple,t6050-smc");
-	if (smc->saved_enabled && of_machine_is_compatible("apple,j714s"))
+	if (smc->saved_enabled && (of_machine_is_compatible("apple,j714s") ||
+				   of_machine_is_compatible("apple,k116s")))
 		smc->wake_reasons = apple_smc_j714s_wake_reasons;
 	/* J813's late notice needs the bounded, IRQ-independent transport too. */
 	if (of_machine_is_compatible("apple,j813"))

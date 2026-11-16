@@ -170,7 +170,8 @@ static int apple_nvme_m5_attach(struct apple_nvme *anv)
 	/* Both boards use T6050 ANS2's split NVMe/NVMMU layout and retained SART. */
 	if (!of_machine_is_compatible("apple,t6050") ||
 	    (!of_machine_is_compatible("apple,j714s") &&
-	     !of_machine_is_compatible("apple,j716c")))
+	     !of_machine_is_compatible("apple,j716c") &&
+	     !of_machine_is_compatible("apple,k116s")))
 		return -EOPNOTSUPP;
 	/* The wait before the restart after a sleep comes from the DT; without it, no sleep. */
 	if (of_property_read_u32(anv->dev->of_node, "apple,sleep-wake-delay-ms",

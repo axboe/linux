@@ -1893,7 +1893,8 @@ static int apple_sleep_validate_cpu_topology(struct apple_sleep *s)
 		    soc->cpu_cores_per_cluster > 32)
 		return dev_err_probe(s->dev, -EINVAL, "invalid CPU-start geometry\n");
 
-	if (soc->machine && (!of_machine_is_compatible(soc->machine) ||
+	if (soc->machine && ((!of_machine_is_compatible(soc->machine) &&
+	     !of_machine_is_compatible("apple,k116s")) ||
 	    cpu_logical_map(0) != soc->boot_mpidr ||
 	    num_possible_cpus() != soc->cpu_count))
 		return dev_err_probe(s->dev, -EINVAL, "unsupported board/CPU inventory\n");

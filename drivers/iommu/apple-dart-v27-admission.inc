@@ -11,6 +11,7 @@ static bool apple_dart_v27_provider(struct device *dev, resource_size_t base)
 
 	if (!IS_ENABLED(CONFIG_APPLE_SOC_SLEEP) ||
 	    !(of_machine_is_compatible("apple,j714s") ||
+	      of_machine_is_compatible("apple,k116s") ||
 	      (of_machine_is_compatible("apple,j716c") &&
 	       of_machine_is_compatible("apple,t6050"))) ||
 	    !of_device_is_compatible(dev->of_node, "apple,t6050-dart"))

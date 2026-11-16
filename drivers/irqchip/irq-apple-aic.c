@@ -340,7 +340,7 @@ static const struct aic_info aic3_info __initconst = {
  * another T6050 board is as one without them.
  */
 static const char *const aic3_t6050_sleep_boards[] __initconst = {
-	"apple,j714s", "apple,j716c", NULL
+	"apple,j714s", "apple,j716c", "apple,k116s", NULL
 };
 
 static const struct aic_info aic3_t6050_info __initconst = {

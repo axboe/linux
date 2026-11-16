@@ -509,7 +509,7 @@ MODULE_PARM_DESC(t6050_ext_sleep,
  */
 static bool dcp_j714s_ext(struct device *dev)
 {
-	return of_machine_is_compatible("apple,j714s") &&
+	return (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s")) &&
 	       of_device_is_compatible(dev->of_node, "apple,t6050-dcpext");
 }
 
@@ -7039,8 +7039,10 @@ static int dcp_platform_probe_pipe(struct platform_device *pdev)
 	iomfb_queue_init(dcp);
 
 	dcp->fw_compat = fw_compat;
+	/* The K116s (firmware 27.2) takes the J714s's sleep and panel paths. */
 	dcp->v27_j714s = fw_compat == DCP_FIRMWARE_V_27_0 &&
-			 of_machine_is_compatible("apple,j714s");
+			 (of_machine_is_compatible("apple,j714s") ||
+			  of_machine_is_compatible("apple,k116s"));
 	/*
 	 * Probe-lifetime like the desktop state: component bind opens a devres
 	 * group on this device and releases it on failure or unbind.
