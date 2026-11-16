@@ -2761,7 +2761,8 @@ static int apple_rtkit_strict_idle_state(struct apple_rtkit *rtk, bool ap)
 		FIELD_PREP(APPLE_RTKIT_MGMT_PWR_STATE, APPLE_RTKIT_PWR_STATE_IDLE));
 	if (ret)
 		return ret;
-	if (!wait_for_completion_timeout(done, msecs_to_jiffies(250)))
+	/* EXPERIMENTAL: 2 s, not 250 ms: firmware 27.2's IOP idle was not acknowledged in 250 ms. */
+	if (!wait_for_completion_timeout(done, msecs_to_jiffies(2000)))
 		return -ETIMEDOUT;
 	return (ap ? READ_ONCE(rtk->ap_power_state) : READ_ONCE(rtk->iop_power_state)) ==
 		APPLE_RTKIT_PWR_STATE_IDLE ? 0 : -EPROTO;

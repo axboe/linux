@@ -2214,6 +2214,21 @@ static bool apple_sleep_gate_failed(struct apple_sleep *s)
 				running++;
 				continue;
 			}
+			/*
+			 * EXPERIMENTAL (K116s): iBoot leaves the external display coprocessors
+			 * running and nothing owns them. Stopped cold, as a crashed one is
+			 * (macOS writes the word twice).
+			 */
+			if (g->k116s_unstarted_ext && g->asc &&
+			    (readl(g->asc + ASC_CPU_CONTROL) & ASC_CPU_CONTROL_RUN)) {
+				u32 before = readl(g->asc + ASC_CPU_CONTROL);
+
+				writel(0, g->asc + ASC_CPU_CONTROL);
+				writel(0, g->asc + ASC_CPU_CONTROL);
+				dev_info(s->dev, "%s: unowned, stopped cold: control %#x -> %#x status %#x\n",
+					 g->name, before, readl(g->asc + ASC_CPU_CONTROL),
+					 readl(g->asc + ASC_CPU_STATUS));
+			}
 			if (g->asc && !(readl(g->asc + ASC_CPU_CONTROL) & ASC_CPU_CONTROL_RUN))
 				continue;
 			dev_err(s->dev, "%s running or RUN control unavailable without driver: asc %d ps %#x control %#x status %#x\n",
