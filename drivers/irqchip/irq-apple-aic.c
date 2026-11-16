@@ -1275,7 +1275,8 @@ static void __init aic_sleep_init(struct aic_irq_chip *irqc)
 {
 	if (!irqc->info.fw_suspend ||
 	    (irqc->info.fw_suspend_board &&
-	     !of_machine_is_compatible(irqc->info.fw_suspend_board)))
+	     !of_machine_is_compatible(irqc->info.fw_suspend_board) &&
+	     !of_machine_is_compatible("apple,k116s")))
 		return;
 
 	aic_sleep.irq_cfg = kcalloc(irqc->nr_die * irqc->nr_irq, sizeof(u32), GFP_KERNEL);

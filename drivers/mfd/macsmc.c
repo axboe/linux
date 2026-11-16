@@ -646,7 +646,7 @@ static int apple_smc_probe(struct platform_device *pdev)
 	mutex_init(&smc->mutex);
 	spin_lock_init(&smc->lock);
 	smc->dev = &pdev->dev;
-	smc->saved_enabled = of_machine_is_compatible("apple,j714s") &&
+	smc->saved_enabled = (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s")) &&
 		of_device_is_compatible(dev->of_node, "apple,t6050-smc");
 	if (smc->saved_enabled)
 		smc->wake_reasons = apple_smc_j714s_wake_reasons;

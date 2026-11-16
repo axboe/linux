@@ -50,7 +50,7 @@
  */
 static bool asahi_g17_m5_provider(struct device *dev)
 {
-	return of_machine_is_compatible("apple,j714s") &&
+	return (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s")) &&
 	       of_machine_is_compatible("apple,t6050") &&
 	       of_device_is_compatible(dev->of_node, "apple,agx-g17s");
 }

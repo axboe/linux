@@ -1016,7 +1016,7 @@ static void dwc3_apple_check_hub_later(struct dwc3_apple *appledwc)
  */
 static bool dwc3_apple_sleep_board(void)
 {
-	return of_machine_is_compatible("apple,j714s");
+	return (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s"));
 }
 
 /*

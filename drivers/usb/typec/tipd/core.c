@@ -362,7 +362,7 @@ static int tps6598x_disconnect(struct tps6598x *tps, u32 status)
  */
 static bool tipd_sleep_ssps_rules(void)
 {
-	return of_machine_is_compatible("apple,j714s");
+	return (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s"));
 }
 
 /*

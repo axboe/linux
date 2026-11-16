@@ -242,7 +242,7 @@ static int apple_spmi_gen4_recover(struct spmi_controller *ctrl, struct apple_sp
 {
 	unsigned int i;
 
-	if (!of_machine_is_compatible("apple,j714s"))
+	if (!(of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s")))
 		return -EIO;
 	usleep_range(REG_POLL_TIMEOUT_US, 2 * REG_POLL_TIMEOUT_US);
 	for (i = 0; i < SPMI_GEN4_REPLY_DRAIN_MAX; i++) {

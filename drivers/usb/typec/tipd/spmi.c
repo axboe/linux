@@ -727,7 +727,7 @@ static bool sn201202x_sleep_event(struct tps6598x *tps)
  */
 static bool sn201202x_j714s(void)
 {
-	return of_machine_is_compatible("apple,j714s");
+	return (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s"));
 }
 
 static int sn201202x_probe(struct spmi_device *device)

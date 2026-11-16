@@ -1579,7 +1579,8 @@ static int apple_sleep_validate_cpu_topology(struct apple_sleep *s)
 		    soc->cpu_cores_per_cluster > 32)
 		return dev_err_probe(s->dev, -EINVAL, "invalid CPU-start geometry\n");
 
-	if (soc->machine && (!of_machine_is_compatible(soc->machine) ||
+	if (soc->machine && ((!of_machine_is_compatible(soc->machine) &&
+	     !of_machine_is_compatible("apple,k116s")) ||
 	    cpu_logical_map(0) != soc->boot_mpidr ||
 	    num_possible_cpus() != soc->cpu_count))
 		return dev_err_probe(s->dev, -EINVAL, "unsupported board/CPU inventory\n");
@@ -3965,6 +3966,20 @@ static void apple_sleep_display_then_gpu(struct apple_sleep *s)
  * The entry of a SoC with early_context, called with the boot core's context saved. All
  * returning checks precede enclave/final-stop.
  */
+/*
+ * EXPERIMENTAL, K116s only: how far a sleep entry may go on a board the profile was not
+ * measured on. 2 (default): refuse after the returning checks, before anything is staged.
+ * 1: refuse after the last returning step (stage, coprocessor checks, final check), which the
+ * entry undoes. 0: sleep.
+ */
+static int k116s_stop = 2;
+module_param(k116s_stop, int, 0644);
+
+static bool apple_sleep_k116s_guard(int level)
+{
+	return of_machine_is_compatible("apple,k116s") && k116s_stop >= level;
+}
+
 static int apple_sleep_enter_prepare(struct apple_sleep *s)
 {
 	const char *step = "SoC check";
@@ -3981,6 +3996,11 @@ static int apple_sleep_enter_prepare(struct apple_sleep *s)
 	ret = apple_sleep_refuse(s);
 	if (ret)
 		return ret;
+	if (apple_sleep_k116s_guard(2)) {
+		dev_info(s->dev, "refused at .enter: K116s guard (k116s_stop=%d), checks passed\n",
+			 k116s_stop);
+		return -EPERM;
+	}
 	ret = apple_sleep_cpus_hold(s);
 	if (!ret) {
 		step = "display prepare";
@@ -4008,6 +4028,10 @@ static int apple_sleep_enter_prepare(struct apple_sleep *s)
 	if (!ret && pm_wakeup_pending()) {
 		step = "wakeup pending";
 		ret = -EBUSY;
+	}
+	if (!ret && apple_sleep_k116s_guard(1)) {
+		step = "K116s guard, all returning steps passed";
+		ret = -EPERM;
 	}
 	if (ret && s->soc->regions)
 		dev_info(s->dev, "refused at .enter: %s: %d\n", step, ret);
@@ -5073,7 +5097,7 @@ int apple_sleep_display_v27_power_ready(struct device *dev)
 	unsigned int d, j;
 
 	if (!s || !s->soc->regions || !s->region ||
-	    !of_machine_is_compatible("apple,j714s") || s->soc->ndisp != 5)
+	    !(of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s")) || s->soc->ndisp != 5)
 		return -EOPNOTSUPP;
 	if (s->region->late_errors || s->region->display_lowered)
 		return -EIO;
@@ -5364,6 +5388,9 @@ static int apple_sleep_probe(struct platform_device *pdev)
 	apple_sleep = s;
 	/* Deep becomes the default sleep state, unless mem_sleep_default= chose another. */
 	suspend_set_ops(s->soc->early_context ? &apple_sleep_early_ops : &apple_sleep_ops);
+	/* EXPERIMENTAL: on the K116s a lid close stays s2idle unless deep is chosen by hand. */
+	if (of_machine_is_compatible("apple,k116s") && mem_sleep_default == PM_SUSPEND_MAX)
+		mem_sleep_current = PM_SUSPEND_TO_IDLE;
 
 	dev_info(dev, "deep sleep %s: boot object resumes %llu\n",
 		 mem_sleep_current == PM_SUSPEND_MEM ? "is the default" :

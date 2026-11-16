@@ -929,3 +929,10 @@
 		wakeup-source;
 	};
 };
+
+/*
+ * EXPERIMENTAL deep sleep: the J714s's sleep controller description and SoC values on the
+ * K116s. The pins to skip and the wake sources are left to the boot loader (ADT).
+ */
+#include "t6050-k116s-sleep.dtsi"
+#include "t6050-j714s-sleep-soc.dtsi"
