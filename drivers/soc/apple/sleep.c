@@ -453,6 +453,7 @@ static int sleep_v27_scope_begin(void);
 static void sleep_v27_scope_end(void);
 static int sleep_v27_final_check(unsigned int i);
 static bool sleep_v27_absent(unsigned int i);
+static int sleep_v27_probe_stop(struct apple_sleep *s);
 static bool sleep_v27_gate_prepared(const struct device_node *np);
 static int sleep_v27_final_stop(struct apple_sleep *s);
 
@@ -4005,6 +4006,10 @@ static void apple_sleep_display_then_gpu(struct apple_sleep *s)
 static int k116s_stop = 2;
 module_param(k116s_stop, int, 0644);
 
+/* EXPERIMENTAL: with k116s_stop=1, also try the internal display's stop before refusing. */
+static bool k116s_probe_stop;
+module_param(k116s_probe_stop, bool, 0644);
+
 static bool apple_sleep_k116s_guard(int level)
 {
 	return of_machine_is_compatible("apple,k116s") && k116s_stop >= level;
@@ -4061,6 +4066,8 @@ static int apple_sleep_enter_prepare(struct apple_sleep *s)
 	}
 	if (!ret && apple_sleep_k116s_guard(1)) {
 		step = "K116s guard, all returning steps passed";
+		if (k116s_probe_stop)
+			sleep_v27_probe_stop(s);
 		ret = -EPERM;
 	}
 	if (ret && s->soc->regions)

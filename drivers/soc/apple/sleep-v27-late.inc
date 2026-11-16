@@ -147,6 +147,27 @@ fail:
 	return ret;
 }
 
+/*
+ * EXPERIMENTAL (K116s): the internal display's committed stop, tried where the entry can still
+ * be refused, to see whether its firmware goes idle. A failure leaves the display dead until a
+ * reboot but not the machine.
+ */
+static int sleep_v27_probe_stop(struct apple_sleep *s)
+{
+	int ret;
+
+	if (!sleep_v27_held || !sleep_v27[0].armed)
+		return -ENODEV;
+	ret = sleep_v27_final_check(0);
+	if (!ret)
+		ret = sleep_v27[0].ops->stop(sleep_v27[0].data);
+	if (!ret)
+		sleep_v27[0].stopped = true;
+	dev_info(s->dev, "K116s probe: internal display stop: %d, control %#x status %#x\n", ret,
+		 readl(s->display[0].asc + ASC_CPU_CONTROL), readl(s->display[0].asc + ASC_CPU_STATUS));
+	return ret;
+}
+
 static int sleep_v27_final_check(unsigned int i)
 {
 	if (!sleep_v27_held || i >= ARRAY_SIZE(sleep_v27) ||

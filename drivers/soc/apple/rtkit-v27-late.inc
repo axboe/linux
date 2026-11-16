@@ -124,6 +124,15 @@ EXPORT_SYMBOL_GPL(apple_rtkit_v27_check);
  */
 static unsigned int v27_idle_ticks = 100000;
 module_param(v27_idle_ticks, uint, 0644);
+/*
+ * EXPERIMENTAL: the power states the atomic idle asks for. 0x201 (idle, state retained) is
+ * macOS's on firmware 27.0; firmware 27.2's display coprocessor does not acknowledge it for
+ * the IOP. 0x10 is quiesced, 0x1 sleep. The idle notice is only awaited for 0x201.
+ */
+static unsigned int v27_idle_ap_state = APPLE_RTKIT_PWR_STATE_IDLE;
+module_param(v27_idle_ap_state, uint, 0644);
+static unsigned int v27_idle_iop_state = APPLE_RTKIT_PWR_STATE_IDLE;
+module_param(v27_idle_iop_state, uint, 0644);
 
 int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 {
@@ -156,7 +165,8 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 			msg.msg1 = APPLE_RTKIT_EP_MGMT;
 			msg.msg0 = FIELD_PREP(APPLE_RTKIT_MGMT_TYPE, ap ?
 				APPLE_RTKIT_MGMT_SET_AP_PWR_STATE : APPLE_RTKIT_MGMT_SET_IOP_PWR_STATE) |
-				FIELD_PREP(APPLE_RTKIT_MGMT_PWR_STATE, APPLE_RTKIT_PWR_STATE_IDLE);
+				FIELD_PREP(APPLE_RTKIT_MGMT_PWR_STATE,
+					   ap ? v27_idle_ap_state : v27_idle_iop_state);
 			dma_wmb();
 			ret = apple_mbox_send_nowait(rtk->mbox, msg);
 			if (!ret) {
@@ -188,12 +198,12 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 				last = msg;
 				if (msg.msg1 == APPLE_RTKIT_EP_MGMT && ap_sent && !ap_ack &&
 				    type == APPLE_RTKIT_MGMT_SET_AP_PWR_STATE_ACK &&
-				    arg == APPLE_RTKIT_PWR_STATE_IDLE) {
+				    arg == v27_idle_ap_state) {
 					ap_ack = true;
 					ap_tick = tick;
 				} else if (msg.msg1 == APPLE_RTKIT_EP_MGMT && iop_sent && !iop_ack &&
 					   type == APPLE_RTKIT_MGMT_SET_IOP_PWR_STATE_ACK &&
-					   arg == APPLE_RTKIT_PWR_STATE_IDLE) {
+					   arg == v27_idle_iop_state) {
 					iop_ack = true;
 					iop_tick = tick;
 				} else if (msg.msg1 == APPLE_RTKIT_EP_MGMT && iop_sent && !done &&
@@ -210,7 +220,8 @@ int apple_rtkit_v27_idle_atomic(struct apple_rtkit_v27_scope *s)
 				}
 			}
 		}
-		if (ap_ack && iop_ack && done && !echo_pending) {
+		if (ap_ack && iop_ack && !echo_pending &&
+		    (done || v27_idle_iop_state != APPLE_RTKIT_PWR_STATE_IDLE)) {
 			dev_info(rtk->dev, "RTKit: atomic idle: AP ack tick %u, IOP ack tick %u, idle notice tick %u, %u received\n",
 				 ap_tick, iop_tick, done_tick, rx);
 			rtk->ap_power_state = rtk->iop_power_state = APPLE_RTKIT_PWR_STATE_IDLE;
