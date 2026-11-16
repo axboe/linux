@@ -269,6 +269,12 @@ const struct dcp_method_entry *iomfb_v27_methods(const char *compat)
 	return NULL;
 }
 
+/* Whether @methods is the 27.2 table. */
+bool iomfb_v27_methods_27_2(const struct dcp_method_entry *methods)
+{
+	return methods == dcp_methods_27_2;
+}
+
 /*
  * The 27.0 table for the J714s, the board the firmware 27 sleep has run on (dcp->v27_j714s): a
  * copy with the sleep's A500 added. The shared table keeps the methods it had, so every other
