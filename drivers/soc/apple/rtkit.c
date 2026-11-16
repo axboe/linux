@@ -2778,11 +2778,18 @@ int apple_rtkit_idle_strict(struct apple_rtkit *rtk)
 	reinit_completion(&rtk->strict_idle_done);
 	WRITE_ONCE(rtk->strict_idle_waiting, true);
 	ret = apple_rtkit_strict_idle_state(rtk, true);
-	if (!ret)
+	if (ret)
+		dev_warn(rtk->dev, "RTKit: strict idle: first state: %d\n", ret);
+	if (!ret) {
 		ret = apple_rtkit_strict_idle_state(rtk, false);
+		if (ret)
+			dev_warn(rtk->dev, "RTKit: strict idle: second state: %d\n", ret);
+	}
 	if (!ret && !wait_for_completion_timeout(&rtk->strict_idle_done,
-						 msecs_to_jiffies(250)))
+						 msecs_to_jiffies(250))) {
+		dev_warn(rtk->dev, "RTKit: strict idle: no IDLE_DONE in 250 ms\n");
 		ret = -ETIMEDOUT;
+	}
 	WRITE_ONCE(rtk->strict_idle_waiting, false);
 	if (!ret && READ_ONCE(rtk->crashed))
 		ret = -EIO;

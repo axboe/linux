@@ -98,6 +98,15 @@ static void sleep_v27_scope_end(void)
 	mutex_unlock(&sleep_v27_lock);
 }
 
+/*
+ * EXPERIMENTAL: a K116s external display coprocessor. The boot loader starts none on firmware
+ * 27.2, so none has a provider and there is nothing of it to arm, check, stop or lower.
+ */
+static bool sleep_v27_absent(unsigned int i)
+{
+	return i && !sleep_v27[i].dev && of_machine_is_compatible("apple,k116s");
+}
+
 static int sleep_v27_scope_begin(void)
 {
 	unsigned int i;
@@ -109,6 +118,8 @@ static int sleep_v27_scope_begin(void)
 		return -EBUSY;
 	sleep_v27_held = true;
 	for (i = 0; i < apple_sleep->soc->ndisp; i++) {
+		if (sleep_v27_absent(i))
+			continue;
 		if (!sleep_v27[i].dev || !sleep_v27[i].prepared ||
 		    !device_is_bound(sleep_v27[i].dev)) {
 			dev_info(apple_sleep->dev, "refused: display %u: %s\n", i,
@@ -166,6 +177,10 @@ static int sleep_v27_final_stop(struct apple_sleep *s)
 		return -EPERM;
 	for (n = 0; n < ARRAY_SIZE(order); n++) {
 		i = order[n];
+		if (sleep_v27_absent(i)) {
+			WRITE_ONCE(s->display[i].quiesced, true);
+			continue;
+		}
 		ret = sleep_v27_final_check(i);
 		if (!ret)
 			ret = sleep_v27[i].ops->stop(sleep_v27[i].data);
