@@ -493,7 +493,7 @@ MODULE_PARM_DESC(t6050_ext_sleep,
  */
 static bool dcp_j714s_ext(struct device *dev)
 {
-	return of_machine_is_compatible("apple,j714s") &&
+	return (of_machine_is_compatible("apple,j714s") || of_machine_is_compatible("apple,k116s")) &&
 	       of_device_is_compatible(dev->of_node, "apple,t6050-dcpext");
 }
 
