@@ -89,6 +89,11 @@
 #include <asm/sysreg.h>
 #include <asm/virt.h>
 
+/* EXPERIMENTAL (K116s): name the commit's stages on the console; costs time the schedule lacks. */
+static bool k116s_trace = true;
+module_param(k116s_trace, bool, 0644);
+#define k116s_mark(fmt, ...) do { if (k116s_trace) pr_emerg("K116s: " fmt "\n", ##__VA_ARGS__); } while (0)
+
 /* Must match aura's struct aura_s2r_mailbox. */
 #define AURA_S2R_MAGIC		0x3152325341525541ULL	/* "AURAS2R1" */
 
@@ -3487,8 +3492,10 @@ static int apple_sleep_commit(unsigned long unused)
 {
 	struct apple_sleep *s = apple_sleep;
 
+	k116s_mark("commit: begin");
 	if (s->soc->ops->commit_begin)
 		s->soc->ops->commit_begin(s);
+	k116s_mark("commit: stopping the parked cores");
 
 	/*
 	 * The other cores stop first, as on macOS. Each answered the hold in .enter, and they
@@ -3497,6 +3504,7 @@ static int apple_sleep_commit(unsigned long unused)
 	s->siq_cfg = read_sysreg_s(SYS_APL_SIQ_CFG_EL1);
 	s->cpus_stop_ret = spin_table_stop_parked();
 
+	k116s_mark("commit: cores stopped %d, the SoC's registers", s->cpus_stop_ret);
 	if (s->soc->ops->commit_regs) {
 		/* A SoC whose irreversible steps share nothing with the ones below. */
 		s->soc->ops->commit_regs(s);
@@ -3520,9 +3528,11 @@ static int apple_sleep_commit(unsigned long unused)
 	dcache_clean_poc((unsigned long)s->mbox, (unsigned long)(s->mbox + 1));
 	if (s->soc->ops->pre_commit)
 		s->soc->ops->pre_commit(s);
+	k116s_mark("commit: writing the commit word");
 	dsb(sy);
 
 	writel(1, s->commit);
+	k116s_mark("commit: word written");
 
 	/* As on macOS: a raised line would end the last WFI, and the engine waits for it. */
 	s->soc->ops->aic_mask_all();
@@ -4125,6 +4135,7 @@ static int apple_sleep_enter_saved(unsigned long unused)
 	if (ret)
 		return ret;
 	pm_set_resume_via_firmware();
+	k116s_mark("entry prepared and committed, calling the commit");
 	/* cpu_suspend has already saved boot context. Commit never returns. */
 	return apple_sleep_commit(0);
 }

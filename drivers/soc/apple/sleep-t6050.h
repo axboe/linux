@@ -2704,8 +2704,17 @@ static void t6050_sleep_wait_before(struct apple_sleep *s, u32 before_us)
 }
 
 /* Waits until the DT schedule's time for commit step @step */
+/*
+ * EXPERIMENTAL (K116s): name each commit step on the console as it is reached. The console
+ * costs time the schedule does not have: for finding where an entry stops, not for sleeping.
+ */
 static void t6050_step(struct apple_sleep *s, unsigned int step)
 {
+	if (k116s_trace)
+		pr_emerg("K116s: step %u (%u us before the timer), %lld us left\n", step,
+			 s->region->sched[step],
+			 div_s64((s64)(s->timer_at - __arch_counter_get_cntpct()) * USEC_PER_SEC,
+				 arch_timer_get_cntfrq()));
 	t6050_sleep_wait_before(s, s->region->sched[step]);
 }
 
