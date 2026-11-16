@@ -452,6 +452,7 @@ struct apple_sleep_region_profile {
 static int sleep_v27_scope_begin(void);
 static void sleep_v27_scope_end(void);
 static int sleep_v27_final_check(unsigned int i);
+static bool sleep_v27_absent(unsigned int i);
 static bool sleep_v27_gate_prepared(const struct device_node *np);
 static int sleep_v27_final_stop(struct apple_sleep *s);
 

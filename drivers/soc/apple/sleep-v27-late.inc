@@ -177,16 +177,14 @@ static int sleep_v27_final_stop(struct apple_sleep *s)
 		return -EPERM;
 	for (n = 0; n < ARRAY_SIZE(order); n++) {
 		i = order[n];
-		if (sleep_v27_absent(i)) {
-			WRITE_ONCE(s->display[i].quiesced, true);
-			continue;
+		if (!sleep_v27_absent(i)) {
+			ret = sleep_v27_final_check(i);
+			if (!ret)
+				ret = sleep_v27[i].ops->stop(sleep_v27[i].data);
+			if (ret)
+				return ret; /* common caller panics; no rollback below SEP */
+			sleep_v27[i].stopped = true;
 		}
-		ret = sleep_v27_final_check(i);
-		if (!ret)
-			ret = sleep_v27[i].ops->stop(sleep_v27[i].data);
-		if (ret)
-			return ret; /* common caller panics; no rollback below SEP */
-		sleep_v27[i].stopped = true;
 		WRITE_ONCE(s->display[i].quiesced, true);
 		/* Each set's words right after its own stop, before the next set's */
 		ret = t6050_sleep_display_off_one(s, i);

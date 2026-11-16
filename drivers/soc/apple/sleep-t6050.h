@@ -1828,7 +1828,8 @@ static int t6050_sleep_display_off_one(struct apple_sleep *s, unsigned int d)
 
 	if (!FIELD_GET(PS_TARGET, val) && !FIELD_GET(PS_ACTUAL, val))
 		return 0;
-	if (!s->display[d].bound || !READ_ONCE(s->display[d].quiesced) || !s->display[d].asc ||
+	if ((!s->display[d].bound && !sleep_v27_absent(d)) ||
+	    !READ_ONCE(s->display[d].quiesced) || !s->display[d].asc ||
 	    (readl(s->display[d].asc + ASC_CPU_CONTROL) & ASC_CPU_CONTROL_RUN))
 		return -EBUSY;
 	if (!s->entry_committed)
@@ -1895,7 +1896,8 @@ static int t6050_sleep_display_prepare(struct apple_sleep *s)
 	if (!apple_sleep_v27_late() || s->entry_committed)
 		return -EOPNOTSUPP;
 	for (d = 0; d < s->soc->ndisp; d++) {
-		ret = sleep_v27_final_check(d);
+		/* EXPERIMENTAL (K116s): an absent external display has no provider to check. */
+		ret = sleep_v27_absent(d) ? 0 : sleep_v27_final_check(d);
 		if (ret) {
 			dev_info(s->dev, "display %u: final check %d\n", d, ret);
 			return ret;
