@@ -928,6 +928,13 @@ static void iomfb_v27_sleep_start(struct apple_dcp *dcp,
 			memset(in + 80, 0, 12);
 			in[84] = 0x20;
 		}
+		/*
+		 * EXPERIMENTAL: 27.2's A492 reads an index count and a block size where 27.0's
+		 * A442 took the filler (its syslog: idx_count 0xaaaaaaaa, block_size 0xaaaa...).
+		 * Their offsets are not known: no indexes and no block.
+		 */
+		if (iomfb_v27_methods_27_2(dcp->v27_methods) && !rpc->a442_key)
+			memset(in + 16, 0, sizeof(in) - 16);
 		dcp_push(dcp, true, a442, sizeof(in), 4100, in, iomfb_v27_a442_done, NULL);
 	}
 }

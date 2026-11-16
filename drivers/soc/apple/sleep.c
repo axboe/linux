@@ -2216,7 +2216,10 @@ static bool apple_sleep_gate_failed(struct apple_sleep *s)
 			}
 			if (g->asc && !(readl(g->asc + ASC_CPU_CONTROL) & ASC_CPU_CONTROL_RUN))
 				continue;
-			dev_err(s->dev, "%s running or RUN control unavailable without driver\n", g->name);
+			dev_err(s->dev, "%s running or RUN control unavailable without driver: asc %d ps %#x control %#x status %#x\n",
+				g->name, !!g->asc, g->ps ? readl(sleep_power_reg(s, g->ps)) : 0,
+				g->asc ? readl(g->asc + ASC_CPU_CONTROL) : 0,
+				g->asc ? readl(g->asc + ASC_CPU_STATUS) : 0);
 			bad++;
 			running++;
 			continue;
