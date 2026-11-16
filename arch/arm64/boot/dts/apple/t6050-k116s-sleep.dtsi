@@ -149,6 +149,19 @@
 	apple,sleep-ssps;
 };
 
+/*
+ * EXPERIMENTAL: the MagSafe port's PD controller (ADT hpm5, nub-spmi-a0 0x08), described as
+ * on the J714s so that the sleep puts it in S3 with the others.
+ */
+&nub_spmi_a0 {
+	hpm5: usb-pd@8 {
+		compatible = "apple,sn201202x";
+		reg = <0x8 SPMI_USID>;
+		apple,no-liquid-detection;
+		apple,sleep-ssps;
+	};
+};
+
 &{/soc@200000000} {
 	/*
 	 * The cores' power-gate enables, /arm-io/pmgr reg[0] + 0x2c000, one word per core: the

@@ -764,6 +764,7 @@ struct apple_sleep {
 		u32 ps;
 		bool allow_unstarted;
 		bool strict_unbound;
+		bool k116s_unstarted_ext;
 	} gate[16];
 	unsigned int gate_count;
 	/* The AP pins, which a deep sleep resets */
@@ -2152,6 +2153,13 @@ static void apple_sleep_gate_prepare(struct apple_sleep *s)
 		g->must_stop = coprocs[i].must_stop;
 		g->ps = coprocs[i].ps;
 		g->allow_unstarted = coprocs[i].allow_unstarted;
+		/*
+		 * EXPERIMENTAL: on the K116s (firmware 27.2) the boot loader hands over no
+		 * external display coprocessor, so none is ever bound.
+		 */
+		g->k116s_unstarted_ext = of_machine_is_compatible("apple,k116s") &&
+			!strcmp(coprocs[i].compatible, "apple,t6050-dcpext");
+		g->allow_unstarted |= g->k116s_unstarted_ext;
 		g->strict_unbound = coprocs[i].strict_unbound;
 		if ((g->must_stop || g->allow_unstarted) && !g->asc) {
 			int idx = coprocs[i].explicit_run_index ? coprocs[i].run_index :
@@ -2197,6 +2205,9 @@ static bool apple_sleep_gate_failed(struct apple_sleep *s)
 		 * mappings refuse; never probe the SMC's unsafe ASC status aperture.
 		 */
 		if (!g->bound && g->allow_unstarted) {
+			/* Never started and its domain off: nothing runs there. */
+			if (g->k116s_unstarted_ext && g->ps && !sleep_ps_on(s, g->ps))
+				continue;
 			if (g->ps && !sleep_ps_on(s, g->ps)) {
 				dev_err(s->dev, "%s RUN state inaccessible; refusing unknown state\n", g->name);
 				bad++;
