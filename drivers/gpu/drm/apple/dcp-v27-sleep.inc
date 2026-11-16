@@ -249,6 +249,42 @@ static int dcp_v27_ext_cycle_ready(struct apple_dcp *dcp)
 }
 
 /*
+ * EXPERIMENTAL (K116s, firmware 27.2): a restart with the secure port, as dcp_s2r_warm_restart()
+ * does it: the port restarted before RUN, mapped between the main mailbox's IOP report and its
+ * AP on, then on.
+ */
+static int dcp_v27_warm_restart(struct apple_dcp *dcp, bool strict)
+{
+	int ret = strict ? apple_rtkit_warm_restart_strict(dcp->rtk) :
+			   apple_rtkit_warm_restart_stopped(dcp->rtk);
+
+	if (!ret && dcp->secure_rtk && dcp->secure_answered) {
+		dcp_secure_poll_stop(dcp);
+		ret = apple_rtkit_port_restart(dcp->secure_rtk);
+		if (ret)
+			dev_warn(dcp->dev, "V27 wake: secure port restart: %d\n", ret);
+	}
+	return ret;
+}
+
+static int dcp_v27_boot(struct apple_dcp *dcp)
+{
+	bool secure = dcp->secure_rtk && dcp->secure_answered;
+	int ret;
+
+	ret = apple_rtkit_boot_with(dcp->rtk, secure ? dcp_secure_port_map : NULL, dcp);
+	if (ret || !secure)
+		return ret;
+	ret = dcp->secure_map_ret ?: apple_rtkit_port_on(dcp->secure_rtk, DCP_SECURE_TIMEOUT_MS);
+	if (ret)
+		dev_warn(dcp->dev, "V27 wake: secure port map %d (%lld us), on %d\n",
+			 dcp->secure_map_ret, dcp->secure_map_us, ret);
+	else
+		dcp_secure_poll_start(dcp);
+	return 0;
+}
+
+/*
  * macOS's DCP stop/restart between its wake steps: sessions closed, AP and IOP
  * idle, IDLE_DONE, receive off, CPU_CONTROL RUN off; dart-dcp stopped, the display's domain off and,
  * at least v27_cycle_hold_ms later, on; dart-dcp started, receive on, RUN on, HELLO, EPMAP, IOP and
@@ -342,12 +378,12 @@ static int dcp_v27_rtkit_cycle(struct apple_dcp *dcp, unsigned int pause_ms)
 				dev_warn(dcp->dev, "V27 wake: RTKit cycle: display DART rewrite %d\n", ret);
 		}
 	}
-	ret = apple_rtkit_warm_restart_strict(dcp->rtk);
+	ret = dcp_v27_warm_restart(dcp, true);
 	if (!ret) {
 		writel(readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL) |
 		       APPLE_DCP_COPROC_CPU_CONTROL_RUN, dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL);
 		run_status = readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_STATUS);
-		ret = apple_rtkit_boot(dcp->rtk);
+		ret = dcp_v27_boot(dcp);
 	}
 	/*
 	 * An external processor that did not start is not left down: its DART, power words and
@@ -366,13 +402,13 @@ static int dcp_v27_rtkit_cycle(struct apple_dcp *dcp, unsigned int pause_ms)
 			ret = apple_dart_m5_display_cycle(dcp->s2r_dcp_dart, true);
 		}
 		if (!ret)
-			ret = apple_rtkit_warm_restart_stopped(dcp->rtk);
+			ret = dcp_v27_warm_restart(dcp, false);
 		if (!ret) {
 			writel(readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL) |
 			       APPLE_DCP_COPROC_CPU_CONTROL_RUN,
 			       dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL);
 			run_status = readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_STATUS);
-			ret = apple_rtkit_boot(dcp->rtk);
+			ret = dcp_v27_boot(dcp);
 		}
 	}
 	if (ret) {
@@ -1235,13 +1271,15 @@ module_param(v27_secure_idle, bool, 0644);
 static void dcp_v27_secure_idle_atomic(void *data)
 {
 	struct apple_dcp *dcp = data;
-	unsigned int us = 0;
 	int ret;
 
 	if (!v27_secure_idle || !dcp->secure_rtk || !dcp->secure_answered)
 		return;
-	ret = apple_rtkit_polled_ap_idle(dcp->secure_rtk, &us);
-	dev_info(dcp->dev, "V27 late stop: secure port AP idle: %d after %u us\n", ret, us);
+	ret = apple_rtkit_v27_port_ap_idle_atomic(dcp->secure_rtk, 5000);
+	/* Sent and not seen acknowledged: give the firmware what the acknowledgment took. */
+	if (ret == -ETIMEDOUT || ret == -ENODEV || ret == -EOPNOTSUPP)
+		udelay(2000);
+	dev_info(dcp->dev, "V27 late stop: secure port AP idle: %d\n", ret);
 }
 
 static int dcp_v27_late_check(void *data)
@@ -1584,7 +1622,7 @@ static int dcp_v27_sleep_restart(struct apple_dcp *dcp)
 	if (s->phase == V27_STOPPED) {
 		ret = apple_sleep_display_v27_power_ready(dcp->dev);
 		if (!ret)
-			ret = apple_rtkit_warm_restart_strict(dcp->rtk);
+			ret = dcp_v27_warm_restart(dcp, true);
 		/*
 		 * The final step stopped this CPU and it is still stopped: the firmware boots
 		 * from its reset vector next, so the state tracked before the stop does not
@@ -1593,12 +1631,12 @@ static int dcp_v27_sleep_restart(struct apple_dcp *dcp)
 		if (ret == -EUCLEAN && READ_ONCE(dcp->s2r_fw_down) &&
 		    !(readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL) &
 		      APPLE_DCP_COPROC_CPU_CONTROL_RUN))
-			ret = apple_rtkit_warm_restart_stopped(dcp->rtk);
+			ret = dcp_v27_warm_restart(dcp, false);
 		if (ret)
 			return dcp_v27_fail(s, ret);
 		writel(readl(dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL) |
 			APPLE_DCP_COPROC_CPU_CONTROL_RUN, dcp->coproc_reg + APPLE_DCP_COPROC_CPU_CONTROL);
-		ret = apple_rtkit_boot(dcp->rtk);
+		ret = dcp_v27_boot(dcp);
 		if (ret)
 			return dcp_v27_fail(s, ret);
 	}
