@@ -1864,11 +1864,25 @@ static int t6050_sleep_display_off_one(struct apple_sleep *s, unsigned int d)
 	}
 	writel((val & ~PS_TARGET) | PS_FLAGS, sleep_region_reg(s, cpu));
 	ret = sleep_ps_wait_off(s, cpu);
+	if (ret)
+		dev_emerg(s->dev, "display %u: CPU word did not go off: %d, reads %#x (was %#x)%s\n",
+			  d, ret, readl(sleep_region_reg(s, cpu)), val,
+			  sleep_v27_absent(d) ? "; absent, left as it is" : "");
 	/* FE, then SYS, on every set, right after its CPU word, as the internal DISP's */
 	for (j = 1; !ret && j < 3; j++) {
 		sleep_ps_lower(s, s->soc->ps.disp[d][j]);
 		ret = sleep_ps_wait_off(s, s->soc->ps.disp[d][j]);
+		if (ret)
+			dev_emerg(s->dev, "display %u: word %u did not go off: %d, reads %#x%s\n",
+				  d, j, ret, readl(sleep_region_reg(s, s->soc->ps.disp[d][j])),
+				  sleep_v27_absent(d) ? "; absent, left as it is" : "");
 	}
+	/*
+	 * EXPERIMENTAL (K116s): an external display nothing owns. Its domain may have users
+	 * this path knows nothing of; the sleep goes on without it.
+	 */
+	if (ret && sleep_v27_absent(d))
+		ret = 0;
 	return ret;
 }
 

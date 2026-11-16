@@ -202,15 +202,19 @@ static int sleep_v27_final_stop(struct apple_sleep *s)
 			ret = sleep_v27_final_check(i);
 			if (!ret)
 				ret = sleep_v27[i].ops->stop(sleep_v27[i].data);
-			if (ret)
+			if (ret) {
+				dev_emerg(s->dev, "display %u: final check or stop: %d\n", i, ret);
 				return ret; /* common caller panics; no rollback below SEP */
+			}
 			sleep_v27[i].stopped = true;
 		}
 		WRITE_ONCE(s->display[i].quiesced, true);
 		/* Each set's words right after its own stop, before the next set's */
 		ret = t6050_sleep_display_off_one(s, i);
-		if (ret)
+		if (ret) {
+			dev_emerg(s->dev, "display %u: power-off after its stop: %d\n", i, ret);
 			return ret;
+		}
 	}
 	return 0;
 }
