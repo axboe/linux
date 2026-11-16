@@ -240,3 +240,12 @@
 	power-domains = <&ps_sio_cpu>;
 	status = "okay";
 };
+
+/*
+ * EXPERIMENTAL: the AP pins a deep sleep neither saves nor restores. The K116s ADT's gpio0 has
+ * no no-restore-gpio-pins, so the boot loader sets none: the J714s's list, plus 138, which this
+ * board reserves. Without the property no pin is saved at all.
+ */
+&sleep {
+	apple,pinctrl-skip-pins = <5 6 7 112 138 141>;
+};
