@@ -270,3 +270,20 @@
 &dcp {
 	apple,k116s-secure-mbox = <&dcp_secure_mbox>;
 };
+
+/*
+ * EXPERIMENTAL: dcpext0 without its Type-C route, as dcpext1 to 3 are here. Its PHY's DP side
+ * is not described on this board, and the engine's probe waits for it and gives the engine
+ * up; a deep sleep needs the engine bound, to stop its firmware.
+ */
+&dcpext0 {
+	/delete-property/ apple,connector-type;
+	/delete-property/ apple,dptx-die;
+	/delete-property/ apple,typec-dptx-phys;
+	/delete-property/ apple,typec-mux-indices;
+	/delete-property/ phys;
+	/delete-property/ phy-names;
+	/delete-property/ mux-controls;
+	/delete-property/ mux-control-names;
+	/delete-node/ typec-routes;
+};
