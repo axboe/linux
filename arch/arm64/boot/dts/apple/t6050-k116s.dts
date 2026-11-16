@@ -929,3 +929,43 @@
 		wakeup-source;
 	};
 };
+
+/*
+ * The video encoder's power states, as on the J714s. iBoot leaves VENC0_SYS on (0xf0003ff), and
+ * with its node disabled nothing ever turned it off: FAB0_SOC then stays up behind it and the SoC
+ * does not enter the firmware-driven sleep (reset 5 s after the commit). macOS has it off at its
+ * commit. Enabled and unused, genpd turns it off at boot. No encoder is described yet.
+ */
+&ps_fab1_piogw {
+	apple,firmware-owned;
+	status = "okay";
+};
+
+&ps_fab0_soc {
+	apple,always-on;
+	status = "okay";
+};
+
+&ps_venc0_sys {
+	status = "okay";
+};
+
+&ps_venc0_dma {
+	status = "okay";
+};
+
+&ps_venc0_pipe4 {
+	status = "okay";
+};
+
+&ps_venc0_pipe5 {
+	status = "okay";
+};
+
+&ps_venc0_me0 {
+	status = "okay";
+};
+
+&ps_venc0_me1 {
+	status = "okay";
+};
