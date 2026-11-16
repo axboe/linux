@@ -255,16 +255,17 @@ static int dcp_v27_ext_cycle_ready(struct apple_dcp *dcp)
  */
 static int dcp_v27_warm_restart(struct apple_dcp *dcp, bool strict)
 {
-	int ret = strict ? apple_rtkit_warm_restart_strict(dcp->rtk) :
-			   apple_rtkit_warm_restart_stopped(dcp->rtk);
+	int ret;
 
-	if (!ret && dcp->secure_rtk && dcp->secure_answered) {
+	/* The port first, then the main mailbox, as dcp_s2r_warm_restart(). */
+	if (dcp->secure_rtk && dcp->secure_answered) {
 		dcp_secure_poll_stop(dcp);
 		ret = apple_rtkit_port_restart(dcp->secure_rtk);
 		if (ret)
 			dev_warn(dcp->dev, "V27 wake: secure port restart: %d\n", ret);
 	}
-	return ret;
+	return strict ? apple_rtkit_warm_restart_strict(dcp->rtk) :
+			apple_rtkit_warm_restart_stopped(dcp->rtk);
 }
 
 static int dcp_v27_boot(struct apple_dcp *dcp)
