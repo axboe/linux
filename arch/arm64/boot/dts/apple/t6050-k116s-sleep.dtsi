@@ -263,7 +263,10 @@
 	};
 };
 
+/*
+ * Not in mboxes: the boot loader hands the display over only to a node whose mboxes is the one
+ * ASC mailbox. The driver adds it to the live tree at probe.
+ */
 &dcp {
-	mboxes = <&dcp_mbox>, <&dcp_secure_mbox>;
-	mbox-names = "mbox", "secure";
+	apple,k116s-secure-mbox = <&dcp_secure_mbox>;
 };
